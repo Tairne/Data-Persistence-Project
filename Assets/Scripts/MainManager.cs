@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
@@ -16,7 +17,10 @@ public class MainManager : MonoBehaviour
     
     private bool m_Started = false;
     private int m_Points;
-    private ScoreData scoreData;
+    private List<ScoreData> scoreData;
+    private ScoreData bestScore;
+    private float elapsedTime = 0f;
+    private int secondsPassed = 0;
 
 
     private bool m_GameOver = false;
@@ -41,7 +45,17 @@ public class MainManager : MonoBehaviour
         }
 
         scoreData = ScoreManager.Load();
-        bestScoreText.text = $"Best Score : {scoreData.playerName} : {scoreData.score}";
+        Debug.Log($"Загружено записей: {scoreData?.Count ?? 0}");
+
+        if (scoreData.Count == 0)
+        {
+            Debug.LogWarning("Нет сохранённых данных");
+        }
+        else
+        {
+            bestScore = scoreData.OrderByDescending(x => x.score).First();
+            bestScoreText.text = $"Best Score : {bestScore.playerName} : {bestScore.score}";
+        }
     }
 
     private void Update()
@@ -66,6 +80,18 @@ public class MainManager : MonoBehaviour
                 SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
             }
         }
+
+        if (m_Started && !m_GameOver)
+        {
+            elapsedTime += Time.deltaTime;
+
+            if (elapsedTime >= 1f)
+            {
+                int secondsToAdd = Mathf.FloorToInt(elapsedTime);
+                secondsPassed += secondsToAdd;
+                elapsedTime -= secondsToAdd;
+            }
+        }
     }
 
     void AddPoint(int point)
@@ -79,12 +105,30 @@ public class MainManager : MonoBehaviour
         m_GameOver = true;
         GameOverText.SetActive(true);
 
-        if (scoreData.score < m_Points)
+        List<string> existNames = scoreData.Select(x => x.playerName).ToList();
+
+        if (existNames.Contains(MenuHandler.userName))
         {
-            scoreData.score = m_Points;
-            scoreData.playerName = MenuHandler.userName;
+            ScoreData targetRow = scoreData.Where(x => x.playerName == MenuHandler.userName).FirstOrDefault();
+            if (targetRow.score < m_Points)
+            {
+                targetRow.score = m_Points;
+                targetRow.Date = System.DateTime.Now;
+                targetRow.time = secondsPassed;
+                ScoreManager.Save(scoreData);
+            }  
+        }
+        else
+        {
+            scoreData.Add(new ScoreData
+            {
+                playerName = MenuHandler.userName,
+                score = m_Points,
+                Date = System.DateTime.Now,
+                time = secondsPassed
+            });
+
             ScoreManager.Save(scoreData);
-            bestScoreText.text = $"Best Score : {scoreData.playerName} : {scoreData.score}";
         }
     }
 }
